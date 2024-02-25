@@ -31,7 +31,7 @@ pid_t **get_children()
 
     // Открываем директорию /proc
     dir = opendir("/proc");
-    if (dir)
+    if (!dir)
     {
         perror("Ошибка при открытии /proc");
         exit(EXIT_FAILURE);
@@ -185,6 +185,7 @@ void choose_options(const char *child_path)
         {
             // Родительский процесс удаляет все C_k, сообщает об этом и завершается.
             close_child_processes();
+            free(option);
             break;
         }
         else
