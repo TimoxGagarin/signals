@@ -15,20 +15,20 @@ char *name_by_pid(pid_t pid)
     snprintf(proc_path, sizeof(proc_path), "/proc/%d/comm", pid);
 
     FILE *file = fopen(proc_path, "r");
-    if (file == NULL)
+    if (!file)
     {
         perror("Error opening file");
         exit(EXIT_FAILURE);
     }
 
     char *name = (char *)malloc(256);
-    if (name == NULL)
+    if (!name)
     {
         perror("Error allocating memory");
         exit(EXIT_FAILURE);
     }
 
-    if (fgets(name, 256, file) == NULL)
+    if (!fgets(name, 256, file))
     {
         fprintf(stderr, "Error reading file\n");
         free(name); // Освободите память, если чтение не удалось
@@ -36,7 +36,7 @@ char *name_by_pid(pid_t pid)
     }
 
     name = (char *)realloc(name, strlen(name) + 1);
-    if (name == NULL)
+    if (!name)
     {
         perror("Error reallocating memory");
         exit(EXIT_FAILURE);
@@ -54,11 +54,11 @@ pid_t pid_by_name(const char *process_name)
     int pid = -1;
 
     entry = readdir(dir);
-    while (dir != NULL && entry)
+    while (dir && entry)
     {
         entry = readdir(dir);
         pid_t current_pid = atoi(entry->d_name);
-        if (current_pid > 0 && strstr(name_by_pid(current_pid), process_name) != NULL)
+        if (current_pid > 0 && !strcmp(name_by_pid(current_pid), process_name))
         {
             pid = current_pid;
             break;
@@ -71,7 +71,7 @@ pid_t pid_by_name(const char *process_name)
 
 void free_children(pid_t **children)
 {
-    for (int i = 0; children[i] != NULL; i++)
+    for (int i = 0; children[i]; i++)
         free(children[i]);
     free(children);
 }

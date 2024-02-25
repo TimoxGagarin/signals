@@ -248,7 +248,7 @@ void list_child_processes()
     printf("Дочерние процессы:\n");
 
     pid_t **children = get_children();
-    for (int i = 0; children[i] != NULL; i++)
+    for (int i = 0; children[i]; i++)
         printf("Name: %s; PID: %d\n", name_by_pid(*(children[i])), *(children[i]));
     free_children(children);
 }
@@ -256,7 +256,7 @@ void list_child_processes()
 void close_child_processes()
 {
     pid_t **children = get_children();
-    for (int i = 0; children[i] != NULL; i++)
+    for (int i = 0; children[i]; i++)
     {
         char *pname = name_by_pid(*(children[i]));
         if (kill(*(children[i]), SIGKILL) != 0)
@@ -277,12 +277,13 @@ void close_last_child_processes()
 {
     pid_t **children = get_children();
     int count = 0;
-    for (; children[count] != NULL; count++)
+    for (; children[count]; count++)
         ;
 
     if (count == 0)
     {
         puts("Дочерние процессы не найдены.");
+        free_children(children);
         return;
     }
 
@@ -290,6 +291,7 @@ void close_last_child_processes()
     if (kill(*(children[count - 1]), SIGKILL) != 0)
     {
         perror("Ошибка при завершении процесса");
+        free_children(children);
         return;
     }
     printf("Процесс %s(%d) был удален. Осталось %d процессов\n", pname, *(children[count - 1]), count - 1);
@@ -305,7 +307,7 @@ void close_last_child_processes()
 void allow_children_print(bool can)
 {
     pid_t **children = get_children();
-    for (int i = 0; children[i] != NULL; i++)
+    for (int i = 0; children[i]; i++)
     {
         char can_print[256];
         snprintf(can_print, 256, "%s_CAN_PRINT", name_by_pid(*(children[i])));
