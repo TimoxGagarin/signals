@@ -9,10 +9,20 @@
 #include <sys/stat.h>
 #include <sys/prctl.h>
 
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+
 char *name_by_pid(pid_t pid)
 {
     char proc_path[256];
-    snprintf(proc_path, sizeof(proc_path), "/proc/%d/comm", pid);
+    int path_length = snprintf(proc_path, sizeof(proc_path), "/proc/%d/comm", pid);
+
+    if (path_length < 0 || path_length >= sizeof(proc_path))
+    {
+        perror("Error forming file path");
+        exit(EXIT_FAILURE);
+    }
 
     FILE *file = fopen(proc_path, "r");
     if (!file)
@@ -28,10 +38,19 @@ char *name_by_pid(pid_t pid)
         exit(EXIT_FAILURE);
     }
 
-    if (!fgets(name, 256, file))
+    if (fgets(name, 256, file) == NULL)
     {
-        fprintf(stderr, "Error reading file\n");
-        free(name); // Освободите память, если чтение не удалось
+        if (feof(file))
+        {
+            fprintf(stderr, "End of file reached\n");
+        }
+        else
+        {
+            fprintf(stderr, "Error reading file\n");
+        }
+
+        free(name);
+        fclose(file);
         exit(EXIT_FAILURE);
     }
 
@@ -39,36 +58,54 @@ char *name_by_pid(pid_t pid)
     if (!name)
     {
         perror("Error reallocating memory");
+        fclose(file);
         exit(EXIT_FAILURE);
     }
 
     name[strlen(name) - 1] = '\0';
-    fclose(file);
+
+    if (fclose(file) != 0)
+    {
+        perror("Error closing file");
+        free(name);
+        exit(EXIT_FAILURE);
+    }
+
     return name;
 }
+
+#include <dirent.h>
 
 pid_t pid_by_name(const char *process_name)
 {
     DIR *dir = opendir("/proc");
-    struct dirent *entry;
-    pid_t pid = -1;
-
-    entry = readdir(dir);
-    while (dir && entry)
+    if (!dir)
     {
-        entry = readdir(dir);
+        perror("Error opening /proc directory");
+        return -1;
+    }
+
+    struct dirent *entry;
+
+    while ((entry = readdir(dir)) != NULL)
+    {
         pid_t current_pid = atoi(entry->d_name);
-        if (current_pid > 0 && !strcmp(name_by_pid(current_pid), process_name))
+        if (current_pid > 0)
         {
-            pid = current_pid;
-            break;
+            char *name = name_by_pid(current_pid);
+            if (name && !strcmp(name, process_name))
+            {
+                free(name);
+                closedir(dir);
+                return current_pid;
+            }
+            free(name);
         }
     }
+
     closedir(dir);
-
-    return pid;
+    return -1;
 }
-
 void free_children(pid_t **children)
 {
     for (int i = 0; children[i]; i++)
