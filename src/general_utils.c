@@ -51,7 +51,7 @@ pid_t pid_by_name(const char *process_name)
 {
     DIR *dir = opendir("/proc");
     struct dirent *entry;
-    int pid = -1;
+    pid_t pid = -1;
 
     entry = readdir(dir);
     while (dir && entry)

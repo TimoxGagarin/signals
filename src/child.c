@@ -85,7 +85,7 @@ int main(int argc, char *argv[])
         perror("prctl PR_SET_NAME");
         exit(EXIT_FAILURE);
     }
-    struct timespec *req;
+    struct timespec *req = (struct timespec *)(sizeof(struct timespec));
     req->tv_nsec = 0;
 
     printf("New child process pid: %d, ppid: %d  \n", getpid(), getppid()); // вывод параметров
@@ -124,5 +124,4 @@ int main(int argc, char *argv[])
         if (strcmp(name_by_pid(getppid()), "systemd") == 0)
             exit(EXIT_SUCCESS);
     }
-    exit(EXIT_SUCCESS);
 }

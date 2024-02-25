@@ -31,13 +31,13 @@ pid_t **get_children()
 
     // Открываем директорию /proc
     dir = opendir("/proc");
-    if (dir == NULL)
+    if (dir)
     {
         perror("Ошибка при открытии /proc");
         exit(EXIT_FAILURE);
     }
     // Читаем содержимое директории /proc
-    while ((entry = readdir(dir)) != NULL)
+    while (entry = readdir(dir))
     {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
             continue;
@@ -63,10 +63,10 @@ pid_t **get_children()
                 snprintf(proc_path, sizeof(proc_path), "/proc/%d/stat", pid);
 
                 FILE *file = fopen(proc_path, "r");
-                if (file != NULL)
+                if (file)
                 {
                     // Читаем информацию из файла /proc/<pid>/stat
-                    long ppid;
+                    long ppid = 0;
                     fscanf(file, "%*d %*s %*c %ld", &ppid);
                     fclose(file);
 
