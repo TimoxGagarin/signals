@@ -85,6 +85,9 @@ int main(int argc, char *argv[])
         perror("prctl PR_SET_NAME");
         exit(EXIT_FAILURE);
     }
+    struct timespec *req;
+    req->tv_nsec = 0;
+    req->tv_sec = 2;
 
     printf("New child process pid: %d, ppid: %d  \n", getpid(), getppid()); // вывод параметров
     initSignalHandlers();
@@ -93,9 +96,9 @@ int main(int argc, char *argv[])
     int count = 100;
     while (count--)
     {
-        bool fl;
+        bool fl = false;
         EndAlarm = false;
-        ualarm(10000, 0); // таймер на 1 с
+        nanosleep(req, NULL);
         while (!EndAlarm)
         {
             pair.first = fl ? 1 : 0;  // если true то 1, иначе 0
