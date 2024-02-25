@@ -87,13 +87,13 @@ int main(int argc, char *argv[])
     }
     struct timespec *req;
     req->tv_nsec = 0;
-    req->tv_sec = 2;
 
     printf("New child process pid: %d, ppid: %d  \n", getpid(), getppid()); // вывод параметров
     initSignalHandlers();
 
     char buf[256]; // буфер для вывода статистики
     int count = 100;
+    req->tv_sec = 2;
     while (count--)
     {
         bool fl = false;
@@ -113,10 +113,12 @@ int main(int argc, char *argv[])
     {
         if (Print)
         {
-            usleep(1000);
+            req->tv_sec = 1;
+            nanosleep(req, NULL);
             Print = false;
             puts(buf);
-            usleep(300);
+            req->tv_sec = 1;
+            nanosleep(req, NULL);
             kill(getppid(), SIGUSR1); // род процессу отпр сигнал SIGUSR1
         }
         if (strcmp(name_by_pid(getppid()), "systemd") == 0)

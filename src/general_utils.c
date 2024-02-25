@@ -53,8 +53,10 @@ pid_t pid_by_name(const char *process_name)
     struct dirent *entry;
     int pid = -1;
 
-    while (dir != NULL && (entry = readdir(dir)) != NULL)
+    entry = readdir(dir);
+    while (dir != NULL && entry)
     {
+        entry = readdir(dir);
         pid_t current_pid = atoi(entry->d_name);
         if (current_pid > 0 && strstr(name_by_pid(current_pid), process_name) != NULL)
         {
