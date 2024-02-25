@@ -25,23 +25,25 @@ typedef struct pair // структура таймера
 
 } pair_t;
 
-bool EndAlarm, Print = true;
+bool EndAlarm;
+bool Print = true;
 pair_t pair = {0, 0};
 stat_t all_stat = {0, 0};
-struct sigaction printSignal, alarmSignal, sigsegvSignal;
+struct sigaction printSignal;
+struct sigaction alarmSignal;
+struct sigaction sigsegvSignal;
 
 void setPrint(int sign) // printSignal
 {
-    Print = true;
-}
-
-void firealarm(int sign)
-{
-    exit(1);
+    if (sign == SIGUSR1)
+        Print = true;
 }
 
 void setAlarm(int sign)
 {
+    if (sign != SIGALRM)
+        return;
+
     EndAlarm = true;
     if (pair.first == pair.second) // расчеты для статистики
     {
@@ -78,8 +80,6 @@ void initSignalHandlers()
 
 int main(int argc, char *argv[])
 {
-    char can_print_var[256];
-
     if (prctl(PR_SET_NAME, argv[0], 0, 0, 0) != NULL)
     {
         perror("prctl PR_SET_NAME");
