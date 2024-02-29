@@ -1,29 +1,30 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <dirent.h>
 #include <unistd.h>
 #include <sys/wait.h>
-#include <dirent.h>
-#include <stdbool.h>
-#include <signal.h>
-#include <sys/stat.h>
 #include <sys/prctl.h>
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-
+/**
+ * @brief Получает имя процесса по его PID.
+ *
+ * @param pid Идентификатор процесса (PID).
+ * @return Указатель на строку с именем процесса.
+ */
 char *name_by_pid(pid_t pid)
 {
     char proc_path[256];
     int path_length = snprintf(proc_path, sizeof(proc_path), "/proc/%d/comm", pid);
 
-    if (path_length < 0 || path_length >= sizeof(proc_path))
+    // Проверка на ошибки при формировании пути к файлу
+    if (path_length < 0 || path_length >= (int)sizeof(proc_path))
     {
         perror("Error forming file path");
         exit(EXIT_FAILURE);
     }
 
+    // Открытие файла с именем процесса
     FILE *file = fopen(proc_path, "r");
     if (!file)
     {
@@ -31,6 +32,7 @@ char *name_by_pid(pid_t pid)
         exit(EXIT_FAILURE);
     }
 
+    // Выделение памяти для имени процесса
     char *name = (char *)malloc(256);
     if (!name)
     {
@@ -38,46 +40,55 @@ char *name_by_pid(pid_t pid)
         exit(EXIT_FAILURE);
     }
 
-    if (fgets(name, 256, file) == NULL)
+    // Чтение имени процесса из файла
+    if (!fgets(name, 256, file))
     {
         if (feof(file))
-        {
             fprintf(stderr, "End of file reached\n");
-        }
         else
-        {
             fprintf(stderr, "Error reading file\n");
-        }
 
         free(name);
         fclose(file);
         exit(EXIT_FAILURE);
     }
 
-    name = (char *)realloc(name, strlen(name) + 1);
-    if (!name)
+    // Убедимся, что строка завершается символом '\0'
+    name[strcspn(name, "\n")] = '\0';
+
+    // Переаллокация памяти под точное количество символов
+    char *temp = (char *)realloc(name, strlen(name) + 1);
+    if (!temp)
     {
         perror("Error reallocating memory");
+        free(name);
         fclose(file);
         exit(EXIT_FAILURE);
     }
 
-    name[strlen(name) - 1] = '\0';
+    name = temp;
 
-    if (fclose(file) != 0)
+    // Закрытие файла
+    if (fclose(file))
     {
         perror("Error closing file");
         free(name);
         exit(EXIT_FAILURE);
     }
 
+    // Возвращение указателя на строку с именем процесса
     return name;
 }
 
-#include <dirent.h>
-
+/**
+ * @brief Получает PID процесса по его имени.
+ *
+ * @param process_name Имя процесса.
+ * @return PID процесса, -1 в случае ошибки или отсутствия процесса с заданным именем.
+ */
 pid_t pid_by_name(const char *process_name)
 {
+    // Открытие директории /proc
     DIR *dir = opendir("/proc");
     if (!dir)
     {
@@ -85,6 +96,7 @@ pid_t pid_by_name(const char *process_name)
         return -1;
     }
 
+    // Чтение содержимого директории /proc
     struct dirent *entry;
 
     while ((entry = readdir(dir)) != NULL)
@@ -103,9 +115,16 @@ pid_t pid_by_name(const char *process_name)
         }
     }
 
+    // Закрытие директории /proc
     closedir(dir);
     return -1;
 }
+
+/**
+ * @brief Освобождает память, выделенную для массива дочерних процессов.
+ *
+ * @param children Указатель на массив дочерних процессов (PID), завершенный нулевым указателем.
+ */
 void free_children(pid_t **children)
 {
     for (int i = 0; children[i]; i++)

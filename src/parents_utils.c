@@ -8,18 +8,23 @@
 #include <signal.h>
 #include <sys/stat.h>
 #include <sys/prctl.h>
-#include <ncurses.h>
 #include <errno.h>
 #include <time.h>
 #include <sys/select.h>
-#include <curses.h>
 
 #include "headers/parent_utils.h"
 #include "headers/general_utils.h"
 #include <bits/types/siginfo_t.h>
 
-struct sigaction printSignal, intSignal;
+struct sigaction printSignal;
+struct sigaction intSignal;
+struct sigaction alarmSignal;
 
+/**
+ * @brief Получает массив дочерних процессов (C_k) для текущего родительского процесса.
+ *
+ * @return Массив дочерних процессов (завершенный нулевым указателем).
+ */
 pid_t **get_children()
 {
     pid_t ppid = getppid();
@@ -37,13 +42,14 @@ pid_t **get_children()
         exit(EXIT_FAILURE);
     }
     // Читаем содержимое директории /proc
-    while (entry = readdir(dir))
+    while ((entry = readdir(dir)) != NULL)
     {
         if (strcmp(entry->d_name, ".") == 0 || strcmp(entry->d_name, "..") == 0)
             continue;
 
-        if (!atoi(entry->d_name) || atoi(entry->d_name) && atoi(entry->d_name) < ppid)
+        if (!atoi(entry->d_name) || (atoi(entry->d_name) && atoi(entry->d_name) < ppid))
             continue;
+
         char full_path[264];
         snprintf(full_path, 264, "/proc/%s", entry->d_name);
         struct stat fileStat;
@@ -87,35 +93,68 @@ pid_t **get_children()
     return ret;
 }
 
+/**
+ * @brief Устанавливает обработчик сигнала для вывода статистики.
+ *
+ * @param sig Номер сигнала.
+ * @param info Структура с информацией о сигнале.
+ * @param context Контекст выполнения.
+ */
 void setPrint(int sig, siginfo_t *info, void *context)
 {
+    if (info->si_pid == getpid())
+        return;
+
     char can_print[256];
     snprintf(can_print, 256, "%s_CAN_PRINT", name_by_pid(info->si_pid));
+
     if (atoi(getenv(can_print)))
-    {
-        usleep(150000);
         kill(info->si_pid, SIGUSR1);
-    }
 }
 
+/**
+ * @brief Обработчик сигнала завершения (SIGINT).
+ *
+ * @param sig Номер сигнала.
+ */
 void handleExit(int sig)
 {
     close_child_processes();
     exit(EXIT_SUCCESS);
 }
 
+/**
+ * @brief Обработчик сигнала таймера (SIGALRM).
+ *
+ * @param sig Номер сигнала.
+ */
+void alarmHandler(int sig)
+{
+    if (sig == SIGALRM)
+        allow_children_print(true);
+}
+
+/**
+ * @brief Инициализирует обработчики сигналов.
+ */
 void initSignalHandlers()
 {
-    printSignal.sa_sigaction = setPrint; // ссылка на функцию setPrint
+    printSignal.sa_sigaction = setPrint; // Устанавливает обработчик сигнала для вывода статистики
     printSignal.sa_flags = SA_SIGINFO | SA_RESTART;
-    sigaction(SIGUSR1, &printSignal, NULL); // устанавливает printSignal в пользвл сигнал SIGUSR1
+    sigaction(SIGUSR1, &printSignal, NULL); // Устанавливает printSignal в пользу сигнала SIGUSR1
 
     intSignal.sa_handler = handleExit;
     sigaction(SIGINT, &intSignal, NULL);
+
+    alarmSignal.sa_handler = alarmHandler;
+    alarmSignal.sa_flags = SA_SIGINFO;
+    sigaction(SIGALRM, &alarmSignal, NULL);
 }
 
 /**
  * @brief Обрабатывает опции, вводимые пользователем, и выполняет соответствующие действия.
+ *
+ * @param child_path Путь к программе, которую необходимо выполнить в дочернем процессе.
  */
 void choose_options(const char *child_path)
 {
@@ -179,7 +218,18 @@ void choose_options(const char *child_path)
             // По истечению заданного времени (5 с, например), если не введен символ «g»,
             // разрешает всем C_k снова выводить статистику.
             allow_children_print(false);
-            allow_child_print(atoi(option + 1), true);
+            char name[18];
+            snprintf(name, 18, "C_%s", option + 1);
+            name[strlen(name) - 1] = '\0';
+            pid_t pid = pid_by_name(name);
+            if (pid == -1)
+            {
+                puts("Process not found");
+                continue;
+            }
+            else
+                kill(pid, SIGUSR1);
+            alarm(5);
         }
         else if (option[0] == 'q')
         {
@@ -236,11 +286,14 @@ void createChildProcess(const char *child_path)
     else
     {
         setenv(can_print, "1", 1);
-        // Ждем завершения дочернего процесса
-        waitpid(pid, NULL, WNOHANG);
+        usleep(1500);
+        kill(pid, SIGUSR1);
     }
 }
 
+/**
+ * @brief Выводит список родительских и дочерних процессов.
+ */
 void list_child_processes()
 {
     char proccess_name[256];
@@ -254,6 +307,9 @@ void list_child_processes()
     free_children(children);
 }
 
+/**
+ * @brief Завершает все дочерние процессы.
+ */
 void close_child_processes()
 {
     pid_t **children = get_children();
@@ -269,11 +325,14 @@ void close_child_processes()
         char can_print[256];
         snprintf(can_print, 256, "%s_CAN_PRINT", pname);
         unsetenv(can_print);
-        waitpid(*(children[i]), NULL, NULL);
+        waitpid(*(children[i]), NULL, 0);
     }
     free_children(children);
 }
 
+/**
+ * @brief Завершает последний дочерний процесс.
+ */
 void close_last_child_processes()
 {
     pid_t **children = get_children();
@@ -300,11 +359,16 @@ void close_last_child_processes()
     char can_print[256];
     snprintf(can_print, 256, "%s_CAN_PRINT", pname);
     unsetenv(can_print);
-    waitpid(*(children[count - 1]), NULL, NULL);
+    waitpid(*(children[count - 1]), NULL, 0);
 
     free_children(children);
 }
 
+/**
+ * @brief Разрешает или запрещает вывод статистики для всех дочерних процессов.
+ *
+ * @param can Флаг, разрешающий (true) или запрещающий (false) вывод статистики.
+ */
 void allow_children_print(bool can)
 {
     pid_t **children = get_children();
@@ -313,23 +377,35 @@ void allow_children_print(bool can)
         char can_print[256];
         snprintf(can_print, 256, "%s_CAN_PRINT", name_by_pid(*(children[i])));
         char val[16];
-        sprintf(val, 16, can);
+        sprintf(val, "%i", can);
         setenv(can_print, val, 1);
+        if (can)
+        {
+            usleep(1000000);
+            kill(*(children[i]), SIGUSR1);
+        }
     }
     free_children(children);
-    raise(SIGUSR1);
 }
 
+/**
+ * @brief Разрешает или запрещает вывод статистики для конкретного дочернего процесса.
+ *
+ * @param pnum Номер дочернего процесса.
+ * @param can Флаг, разрешающий (true) или запрещающий (false) вывод статистики.
+ */
 void allow_child_print(int pnum, bool can)
 {
     DIR *dir;
     struct dirent *entry;
 
+    char name[16];
     char can_print[256];
-    sprintf(can_print, 256, "C_%d_CAN_PRINT", pnum);
+    snprintf(name, 256, "C_%i", pnum);
+    snprintf(can_print, 256, "%s_CAN_PRINT", name);
 
     char val[16];
-    sprintf(val, 16, can);
+    sprintf(val, "%i", can);
     setenv(can_print, val, 1);
-    raise(SIGUSR1);
+    kill(pid_by_name(name), SIGUSR1);
 }

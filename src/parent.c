@@ -1,19 +1,15 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <string.h>
-#include <locale.h>
-#include <unistd.h>
-#include <sys/wait.h>
-#include <sys/stat.h>
 #include "headers/parent_utils.h"
-#include <dirent.h>
 #include <sys/prctl.h>
-#include <signal.h>
 
+// Главная функция программы
 int main(int argc, char *argv[])
 {
+    // Инициализация обработчиков сигналов
     initSignalHandlers();
 
+    // Проверка корректного количества аргументов командной строки
     if (argc != 2)
     {
         printf("Неверное количество аргументов. Правильное использование программы:\n");
@@ -21,7 +17,8 @@ int main(int argc, char *argv[])
         exit(EXIT_FAILURE);
     }
 
-    if (prctl(PR_SET_NAME, "P", 0, 0, 0) != NULL)
+    // Установка имени процесса с использованием prctl
+    if (prctl(PR_SET_NAME, "P", 0, 0, 0))
     {
         perror("prctl PR_SET_NAME");
         exit(EXIT_FAILURE);
@@ -29,5 +26,7 @@ int main(int argc, char *argv[])
 
     // Обработка опций и выполнение соответствующих действий
     choose_options(argv[1]);
+
+    // Завершение программы с успешным кодом завершения
     exit(EXIT_SUCCESS);
 }
